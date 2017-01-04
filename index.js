@@ -201,7 +201,7 @@ function activeItem(entry) {
     currTerminal.io.sendString('\b'.repeat(currUserInputData.length));
     currTerminal.io.sendString(command);
     currTerminal.io.sendString('\n');
-    currUserInputData = command;
+    currUserInputData = '';
     historyEntries = [];
     updateReact();
     console.log('to active command', command);
