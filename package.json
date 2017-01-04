@@ -1,11 +1,22 @@
 {
-  "name": "hyper-history",
-  "version": "1.0.1",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC"
+	"name": "hyper-history",
+	"version": "1.0.2",
+	"keywords": [
+		"hyper"
+	],
+	"maintainers": [{
+		"name": "Gary Xue",
+		"email": "gary.xuehong@gmail.com"
+	}],
+	"homepage": "https://github.com/garyxuehong/hyper-history#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/garyxuehong/hyper-history.git"
+	},
+	"readme": "readme.md",
+	"description": "Show list of history of bash commands",
+	"main": "index.js",
+	"scripts": {},
+	"author": "Gary Xue",
+	"license": "ISC"
 }
