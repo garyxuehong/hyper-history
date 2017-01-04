@@ -13,8 +13,8 @@ let historyEntries = [];
 
 exports.decorateConfig = (config) => {
     return Object.assign({}, config, {
-        termCSS: `
-            ${config.termCSS || ''}
+        css: `
+            ${config.css || ''}
             .hyper-history {
                 position: fixed;
                 top: 0px;
