@@ -1,6 +1,6 @@
 {
 	"name": "hyper-history",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"keywords": [
 		"hyper"
 	],
@@ -13,7 +13,6 @@
 		"type": "git",
 		"url": "git+https://github.com/garyxuehong/hyper-history.git"
 	},
-	"readme": "readme.md",
 	"description": "Show list of history of bash commands",
 	"main": "index.js",
 	"scripts": {},
