@@ -10,6 +10,7 @@ const QUICK_SELECT_CHAR_CODE = [CHAR_CODE_1, CHAR_CODE_2, CHAR_CODE_3];
 
 let reactHistoryNav;
 
+let allTerminals = {};
 let currTerminal;
 
 let currPid = '';
@@ -127,8 +128,12 @@ exports.middleware = (store) => (next) => (action) => {
                 currUserInputData.length === 0 ? reset() : grepHistory();
             }
             break;
+        case 'SESSION_ADD':
+            window.HYPER_HISTORY_TERM = currTerminal = allTerminals[action.uid];
+            break;
         case 'SESSION_SET_ACTIVE':
             currPid = uids[action.uid].pid;
+            window.HYPER_HISTORY_TERM = currTerminal = allTerminals[action.uid];
             setCwd(currPid);
             break;
     }
@@ -141,33 +146,21 @@ exports.decorateTerm = (Term, { React, notify }) => {
 
         constructor(props, context) {
             super(props, context);
-            this._onTerminal = this._onTerminal.bind(this);
+            this.onTerminal = this.onTerminal.bind(this, this);
         }
 
-        _onTerminal(term) {
-            if (this.props && this.props.onTerminal) this.props.onTerminal(term);
+        onTerminal(self, term) {
+            if (self.props.onTerminal) self.props.onTerminal(term);
+            allTerminals[self.props.uid] = term;
+            window.HYPER_HISTORY_TERM_ALL = allTerminals;
             window.HYPER_HISTORY_TERM = currTerminal = term;
-            const handler = [
-                "keydown",
-                function(e) {
-                    if (e.metaKey && e.keyCode === 220) {
-                        e.preventDefault();
-                        onepass.password("sudolikeaboss://local")
-                            .then(pass => this.terminal.io.sendString(pass))
-                            .catch(() => {});
-                    }
-                }.bind(term.keyboard)
-            ];
-
-            term.uninstallKeyboard();
-            term.keyboard.handlers_ = [handler].concat(term.keyboard.handlers_);
-            term.installKeyboard();
         }
 
         render() {
-            return React.createElement(Term, Object.assign({}, this.props, {
-                onTerminal: this._onTerminal
-            }));
+            let props = Object.assign({}, this.props, {
+                onTerminal: this.onTerminal
+            });
+            return React.createElement(Term, props);
         }
 
     };
