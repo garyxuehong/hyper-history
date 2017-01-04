@@ -49,10 +49,10 @@ exports.decorateConfig = (config) => {
                 padding: 3px;
                 border: 1px solid currentColor;
             }
-            .hyper-history-list__item:hover .hyper-history-list__item:after {
+            .hyper-history-list__item:hover.hyper-history-list__item:after {
                 opacity: 0.4;
             }
-            .hyper-history-list__item:active .hyper-history-list__item:after {
+            .hyper-history-list__item:active.hyper-history-list__item:after {
                 opacity: 1;
             }
         `
