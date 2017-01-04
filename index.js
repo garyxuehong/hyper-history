@@ -2,6 +2,12 @@ let { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+const CHAR_CODE_1 = 161;
+const CHAR_CODE_2 = 8482;
+const CHAR_CODE_3 = 163;
+
+const QUICK_SELECT_CHAR_CODE = [CHAR_CODE_1, CHAR_CODE_2, CHAR_CODE_3];
+
 let reactHistoryNav;
 
 let currTerminal;
@@ -11,19 +17,22 @@ let currUserInputData = '';
 let currCwd = '/';
 let historyEntries = [];
 
+let supressMode = false;
+
 exports.decorateConfig = (config) => {
     return Object.assign({}, config, {
         css: `
             ${config.css || ''}
             .hyper-history {
                 position: fixed;
-                top: 0px;
-                bottom: 0px;
+                top: 50px;
+                bottom: 50px;
                 right: 0px;
                 width: 30%;
                 min-width: 200px;
                 max-width: 400px;
                 pointer-events: none;
+                overflow: scroll;
             }
             .hyper-history-list {
                 pointer-events: initial;
@@ -75,11 +84,12 @@ exports.decorateHyper = (Hyper, { React }) => {
                         React.createElement('div', { className: 'hyper-history-list' },
                             ...historyEntries.map(entry => {
                                 return React.createElement('div', {
+                                    key: entry.index,
                                     className: 'hyper-history-list__item',
                                     onClick: _ => {
                                         activeItem(entry);
                                     }
-                                }, entry.command);
+                                }, `[${entry.index}]: ${entry.command}`);
                             })
                         )
                     )
@@ -90,11 +100,24 @@ exports.decorateHyper = (Hyper, { React }) => {
 };
 
 exports.middleware = (store) => (next) => (action) => {
+
+    if (supressMode) {
+        return next(action);
+    }
+
     const uids = store.getState().sessions.sessions;
     switch (action.type) {
         case 'SESSION_USER_DATA':
             const { data } = action;
-            if (data.charCodeAt(0) === 13) {
+            let charCode = data.charCodeAt(0);
+            if (QUICK_SELECT_CHAR_CODE.includes(charCode)) {
+                let idxQuickSel = QUICK_SELECT_CHAR_CODE.indexOf(charCode);
+                if (idxQuickSel >= 0 && historyEntries.length > idxQuickSel) {
+                    activeItem(historyEntries[idxQuickSel]);
+                }
+                reset();
+                return; //prevent input
+            } else if (data.charCodeAt(0) === 13) {
                 reset();
             } else if (data.charCodeAt(0) === 127) {
                 currUserInputData = currUserInputData ? currUserInputData.slice(0, -1) : '';
@@ -172,9 +195,10 @@ function grepHistory() {
                         return e.toLowerCase();
                     }
                 })
-                .filter(e => !!e && e.indexOf(currUserInputData) != -1)
-                .map(e => {
+                .filter(e => !!e && fuzzy_match(e, currUserInputData))
+                .map((e, i) => {
                     return {
+                        index: i + 1,
                         command: e
                     }
                 });
@@ -197,6 +221,7 @@ function setCwd(pid) {
 };
 
 function activeItem(entry) {
+    supressMode = true;
     let command = entry.command;
     currTerminal.io.sendString('\b'.repeat(currUserInputData.length));
     currTerminal.io.sendString(command);
@@ -204,5 +229,36 @@ function activeItem(entry) {
     currUserInputData = '';
     historyEntries = [];
     updateReact();
+    supressMode = false;
+    currTerminal.focus();
     console.log('to active command', command);
+}
+
+function fuzzy_match(text, search) {
+    /*
+    Parameter text is a title, search is the user's search
+    */
+    // remove spaces, lower case the search so the search
+    // is case insensitive
+    var search = search.replace(/\ /g, '').toLowerCase();
+    var tokens = [];
+    var search_position = 0;
+
+    // Go through each character in the text
+    for (var n = 0; n < text.length; n++) {
+        var text_char = text[n];
+        // if we match a character in the search, highlight it
+        if (search_position < search.length &&
+            text_char.toLowerCase() == search[search_position]) {
+            text_char = '<b>' + text_char + '</b>';
+            search_position += 1;
+        }
+        tokens.push(text_char);
+    }
+    // If are characters remaining in the search text,
+    // return an empty string to indicate no match
+    if (search_position != search.length) {
+        return '';
+    }
+    return tokens.join('');
 }
