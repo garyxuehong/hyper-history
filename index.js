@@ -23,18 +23,37 @@ exports.decorateConfig = (config) => {
                 width: 30%;
                 min-width: 200px;
                 max-width: 400px;
+                pointer-events: none;
             }
             .hyper-history-list {
-
+                pointer-events: initial;
             }
             .hyper-history-list__item {
-                min-height: 30px;
+                padding: 4px;
+                cursor: pointer;
+                position: relative;
+            }
+            .hyper-history-list__item:after {
+                content: "";
+                display: block;
+                top: 0px;
+                left: 0px;
+                width: 100%;
+                height: 100%;
+                position: absolute;
+                background-color: currentColor;
+                opacity: 0;
+                transition: opacity .1s ease;
             }
             .hyper-history-list__item:hover {
-                border: 2px solid orange;
+                padding: 3px;
+                border: 1px solid currentColor;
             }
-            .hyper-history-list__item:active {
-                background-color: white;
+            .hyper-history-list__item:hover .hyper-history-list__item:after {
+                opacity: 0.4;
+            }
+            .hyper-history-list__item:active .hyper-history-list__item:after {
+                opacity: 1;
             }
         `
     });
@@ -52,25 +71,11 @@ exports.decorateHyper = (Hyper, { React }) => {
         render() {
             return (
                 React.createElement(Hyper, Object.assign({}, this.props, {
-                    customChildren: React.createElement('div', {
-                            className: 'hyper-history',
-                            style: {
-                                position: 'fixed',
-                                top: 0,
-                                bottom: 0,
-                                right: 0,
-                                width: '30%',
-                                minWidth: '200px',
-                                maxWidth: '400px'
-                            }
-                        },
+                    customChildren: React.createElement('div', { className: 'hyper-history' },
                         React.createElement('div', { className: 'hyper-history-list' },
                             ...historyEntries.map(entry => {
                                 return React.createElement('div', {
                                     className: 'hyper-history-list__item',
-                                    style: {
-                                        minHeight: '30px'
-                                    },
                                     onClick: _ => {
                                         activeItem(entry);
                                     }
