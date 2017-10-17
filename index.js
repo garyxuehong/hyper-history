@@ -90,7 +90,11 @@ exports.decorateHyper = (Hyper, { React }) => {
                                     onClick: _ => {
                                         activeItem(entry);
                                     }
-                                }, `[${entry.index}]: ${entry.command}`);
+                                }, ...[
+                                  React.createElement('span', null, `[${entry.index + 1}]`),
+                                  ...entry.decoratedCommand
+                                      .map(e => React.createElement(e.text_elem, null, e.text_char))
+                                  ]);
                             })
                         )
                     )
@@ -188,13 +192,16 @@ function grepHistory() {
                         return e.toLowerCase();
                     }
                 })
-                .filter(e => !!e && fuzzy_match(e, currUserInputData))
-                .map((e, i) => {
+                .map(e => {
                     return {
-                        index: i + 1,
-                        command: e
+                        command: e,
+                        decoratedCommand: fuzzy_match(e, currUserInputData)
                     }
-                });
+                })
+                .filter(e => e.decoratedCommand.length > 0)
+                .map((e, i) => Object.assign({}, e, {
+                    index: i
+                }));
             updateReact();
         } else {
             console.error(err);
@@ -231,6 +238,10 @@ function fuzzy_match(text, search) {
     /*
     Parameter text is a title, search is the user's search
     */
+    // If text is coerced to false, return empty list
+    if (!text) {
+      return [];
+    }
     // remove spaces, lower case the search so the search
     // is case insensitive
     var search = search.replace(/\ /g, '').toLowerCase();
@@ -240,18 +251,19 @@ function fuzzy_match(text, search) {
     // Go through each character in the text
     for (var n = 0; n < text.length; n++) {
         var text_char = text[n];
+        var text_elem = 'span';
         // if we match a character in the search, highlight it
         if (search_position < search.length &&
             text_char.toLowerCase() == search[search_position]) {
-            text_char = '<b>' + text_char + '</b>';
+            text_elem = 'b';
             search_position += 1;
         }
-        tokens.push(text_char);
+        tokens.push({text_elem, text_char});
     }
     // If are characters remaining in the search text,
-    // return an empty string to indicate no match
+    // return an empty list to indicate no match
     if (search_position != search.length) {
-        return '';
+        return [];
     }
-    return tokens.join('');
+    return tokens;
 }
