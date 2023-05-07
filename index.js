@@ -14,11 +14,22 @@ let allTerminals = {};
 let currTerminal;
 
 let currPid = '';
+let actionUid = ''
 let currUserInputData = '';
 let currCwd = '/';
 let historyEntries = [];
 
 let supressMode = false;
+
+let FullHistory = ''
+
+const terms = {}
+exports.terms = terms
+
+let windowGlobal = null
+
+
+const FullPathHistory = path.join(process.env['HOME'], '.bash_history')
 
 exports.decorateConfig = (config) => {
     return Object.assign({}, config, {
@@ -37,10 +48,13 @@ exports.decorateConfig = (config) => {
             }
             .hyper-history-list {
                 pointer-events: initial;
+                overflow: auto;
+                width: 100%;
             }
             .hyper-history-list__item {
                 padding: 4px;
                 cursor: pointer;
+                background-color: currentColor;
                 position: relative;
             }
             .hyper-history-list__item:after {
@@ -57,7 +71,8 @@ exports.decorateConfig = (config) => {
             }
             .hyper-history-list__item:hover {
                 padding: 3px;
-                border: 1px solid currentColor;
+                border: 0.01px solid currentColor;
+                border-radius: 4px;
             }
             .hyper-history-list__item:hover.hyper-history-list__item:after {
                 opacity: 0.4;
@@ -77,10 +92,11 @@ exports.decorateHyper = (Hyper, { React }) => {
             this.state = {}
             this.handleClick = this.handleClick.bind(this);
         }
-        handleClick(e) {}
+        handleClick(e) { }
         render() {
             return (
                 React.createElement(Hyper, Object.assign({}, this.props, {
+
                     customChildren: React.createElement('div', { className: 'hyper-history' },
                         React.createElement('div', { className: 'hyper-history-list' },
                             ...historyEntries.map(entry => {
@@ -90,11 +106,7 @@ exports.decorateHyper = (Hyper, { React }) => {
                                     onClick: _ => {
                                         activeItem(entry);
                                     }
-                                }, ...[
-                                  React.createElement('span', null, `[${entry.index + 1}]`),
-                                  ...entry.decoratedCommand
-                                      .map(e => React.createElement(e.text_elem, null, e.text_char))
-                                  ]);
+                                }, `${entry.command}`);
                             })
                         )
                     )
@@ -105,13 +117,35 @@ exports.decorateHyper = (Hyper, { React }) => {
 };
 
 exports.middleware = (store) => (next) => (action) => {
-
     if (supressMode) {
         return next(action);
     }
-
     const uids = store.getState().sessions.sessions;
+    console.log(uids, action)
+    actionUid = action.uid
     switch (action.type) {
+        case 'SESSION_SET_XTERM_TITLE':
+            pid = uids[action.uid].pid;
+            break;
+
+        case 'SESSION_ADD':
+            pid = action.pid;
+            setCwd(pid);
+            break;
+
+        case 'SESSION_ADD_DATA':
+            const { data: dataRaw } = action;
+            const enterKey = dataRaw.indexOf('\n') > 0;
+
+            if (enterKey) {
+                setCwd(pid, action);
+            }
+            break;
+
+        case 'SESSION_SET_ACTIVE':
+            pid = uids[action.uid].pid;
+            setCwd(pid);
+            break;
         case 'SESSION_USER_DATA':
             const { data } = action;
             let charCode = data.charCodeAt(0);
@@ -131,42 +165,54 @@ exports.middleware = (store) => (next) => (action) => {
                 currUserInputData += (data ? data : '').toLowerCase();
                 currUserInputData.length === 0 ? reset() : grepHistory();
             }
-            break;
-        case 'SESSION_ADD':
-            window.HYPER_HISTORY_TERM = currTerminal = allTerminals[action.uid];
-            break;
-        case 'SESSION_SET_ACTIVE':
-            currPid = uids[action.uid].pid;
-            window.HYPER_HISTORY_TERM = currTerminal = allTerminals[action.uid];
-            setCwd(currPid);
-            break;
+            
+            break;       
     }
     next(action);
 };
 
+const PLUGIN = 'visual12312311';
+const WRITE_TO_TERMINAL = `write to terminal`;
+
+function waitFor(object, key, fn) {
+	if (key in object) {
+		fn(object[key]);
+	} else {
+		setTimeout(() => waitFor(object, key, fn), 10);
+	}
+}
+
+exports.onWindow = (win) => {
+    win.rpc.on(WRITE_TO_TERMINAL, ({ uid, command }) => {
+     setTimeout(() => {
+       win.sessions.forEach(session => {
+         session.write('clear')
+           session.write('\x0a');
+            session.write(command);
+            session.write('\x0a');
+        })
+    }, 1000)
+    });
+}
+
 exports.decorateTerm = (Term, { React, notify }) => {
-
     return class extends React.Component {
-
         constructor(props, context) {
             super(props, context);
             this.onTerminal = this.onTerminal.bind(this, this);
         }
-
         onTerminal(self, term) {
             if (self.props.onTerminal) self.props.onTerminal(term);
             allTerminals[self.props.uid] = term;
             window.HYPER_HISTORY_TERM_ALL = allTerminals;
             window.HYPER_HISTORY_TERM = currTerminal = term;
         }
-
         render() {
             let props = Object.assign({}, this.props, {
                 onTerminal: this.onTerminal
             });
             return React.createElement(Term, props);
         }
-
     };
 };
 
@@ -176,94 +222,93 @@ function reset() {
     updateReact();
 }
 
+let lastModifiedTime = 0
+function readFullFile() {
+    const statFile = fs.statSync(FullPathHistory)
+    if (statFile.mtime !== lastModifiedTime) {
+        lastModifiedTime = statFile.mtime
+        FullHistory = fs.readFileSync(FullPathHistory).toString().split('\n')
+        return FullHistory
+    }
+
+    return FullHistory
+}
+
 function grepHistory() {
-    fs.readFile(path.join(process.env['HOME'], '.bash_history'), (err, data) => {
-        if (!err) {
-            let history = data.toString();
-            let set = {};
-            historyEntries = !history ? [] : history.split('\n')
-                .map(e => {
-                    if (e.length <= 2) {
-                        return undefined;
-                    } else if (set[e] === true) {
-                        return undefined;
-                    } else {
-                        set[e] = true;
-                        return e.toLowerCase();
-                    }
-                })
-                .map(e => {
-                    return {
-                        command: e,
-                        decoratedCommand: fuzzy_match(e, currUserInputData)
-                    }
-                })
-                .filter(e => e.decoratedCommand.length > 0)
-                .map((e, i) => Object.assign({}, e, {
-                    index: i
-                }));
-            updateReact();
-        } else {
-            console.error(err);
+    let history = readFullFile()
+    let set = {};
+
+    historyEntries = []
+
+    const historySplited = history
+    const lengthHistory = historySplited.length;
+
+    for (let index = lengthHistory - 1; index >= 0; index--) {
+        const element = historySplited[index];
+        if (element.length <= 2 || set[element] === true) {
+            continue;
         }
-    });
+        set[element] = true;
+        if (!!element && fuzzy_match(element, currUserInputData)) {
+            historyEntries.push({
+                index: historyEntries.length + 1,
+                command: element
+            });
+        }
+    }
+    updateReact();
 }
 
 function updateReact() {
     reactHistoryNav.forceUpdate();
 }
 
-// Current shell cwd
 function setCwd(pid) {
     exec(`lsof -p ${pid} | grep cwd | tr -s ' ' | cut -d ' ' -f9-`, (err, cwd) => {
         currCwd = cwd.trim();
     })
 };
 
+function sendCommand(data) {
+  return (dispatch) => {
+    dispatch({ type: 'SEND_DATA_TERM', uid: actionUid, data: data, now: Date.now() });
+  };
+};
+
+const writeToTerminal = (command, uid) => window.rpc.emit(WRITE_TO_TERMINAL, { command, uid });
+const executeCommand = (command, uid, currentInput = '') =>
+  writeToTerminal(`${'\b'.repeat(currentInput.length)}${command}\r`, uid);
+
 function activeItem(entry) {
     supressMode = true;
     let command = entry.command;
-    currTerminal.io.sendString('\b'.repeat(currUserInputData.length));
-    currTerminal.io.sendString(command);
-    currTerminal.io.sendString('\n');
+    writeToTerminal(command, currPid)
+   
     currUserInputData = '';
     historyEntries = [];
-    updateReact();
     supressMode = false;
-    currTerminal.focus();
-    console.log('to active command', command);
 }
 
 function fuzzy_match(text, search) {
-    /*
-    Parameter text is a title, search is the user's search
-    */
-    // If text is coerced to false, return empty list
-    if (!text) {
-      return [];
-    }
-    // remove spaces, lower case the search so the search
-    // is case insensitive
-    var search = search.replace(/\ /g, '').toLowerCase();
-    var tokens = [];
-    var search_position = 0;
+  search = search.replace(/\s+/g, '').toLowerCase();
 
-    // Go through each character in the text
-    for (var n = 0; n < text.length; n++) {
-        var text_char = text[n];
-        var text_elem = 'span';
-        // if we match a character in the search, highlight it
-        if (search_position < search.length &&
-            text_char.toLowerCase() == search[search_position]) {
-            text_elem = 'b';
-            search_position += 1;
-        }
-        tokens.push({text_elem, text_char});
+  const tokens = new Array(text.length);
+
+  let searchPosition = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    const textChar = text[i];
+    const isMatch =
+      searchPosition < search.length &&
+      textChar.toLowerCase() === search[searchPosition];
+
+    if (isMatch) {
+      tokens[i] = `<b>${textChar}</b>`;
+      searchPosition++;
+    } else {
+      tokens[i] = textChar;
     }
-    // If are characters remaining in the search text,
-    // return an empty list to indicate no match
-    if (search_position != search.length) {
-        return [];
-    }
-    return tokens;
+  }
+
+  return searchPosition === search.length ? tokens.join('') : '';
 }
